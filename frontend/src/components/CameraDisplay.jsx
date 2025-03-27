@@ -16,6 +16,10 @@ export default function CameraDisplay({ className = '' }) {
             src="/api/video_feed" 
             alt="Flux vidéo du robot" 
             className="max-w-full max-h-full"
+            onError={(e) => {
+              console.error('Erreur de chargement du flux vidéo');
+              e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23333"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23999" font-size="14px">Flux vidéo non disponible</text></svg>';
+            }}
           />
         ) : (
           <div className="text-gray-500 text-center p-4">

@@ -8,7 +8,7 @@ import { useRobotStore } from "./store/RobotStore";
 // Fonction pour récupérer l'état du robot depuis le backend
 const fetchRobotStatus = async (setConnected, setBatteryLevel, setExecuting) => {
   try {
-    const response = await fetch('http://localhost:8000/status');
+    const response = await fetch('/api/status');
     if (response.ok) {
       const data = await response.json();
       setConnected(data.connected);

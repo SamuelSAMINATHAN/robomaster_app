@@ -2,6 +2,8 @@
  * Génération de code Python pour chaque bloc
  * défini dans blocks/mon_module.js
  ****************************************************/
+import * as Blockly from 'blockly';
+import 'blockly/python';
 
 // Pour insérer un champ dans le code Python, on utilise:
 // Blockly.Python.valueToCode(block, "NOM_DU_CHAMP", Blockly.Python.ORDER_ATOMIC)

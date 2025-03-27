@@ -1,5 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import { useRobotStore } from '../store/RobotStore';
+import * as Blockly from 'blockly';
+import 'blockly/python';
+import 'blockly/blocks';
 
 export default function BlocklyEditor({ onCodeGenerated }) {
   const blocklyDiv = useRef(null);
@@ -73,13 +76,13 @@ export default function BlocklyEditor({ onCodeGenerated }) {
     };
 
     // Création de l'espace de travail Blockly
-    blocklyWorkspace.current = window.Blockly.inject(blocklyDiv.current, {
+    blocklyWorkspace.current = Blockly.inject(blocklyDiv.current, {
       toolbox,
       scrollbars: true,
       horizontalLayout: false,
       trashcan: true,
       sounds: false,
-      media: 'blockly/media/',
+      media: 'node_modules/blockly/media/',
       grid: {
         spacing: 20,
         length: 3,
@@ -99,8 +102,8 @@ export default function BlocklyEditor({ onCodeGenerated }) {
     // Chargement du XML si disponible
     if (currentScript?.blocklyXml) {
       try {
-        const xml = window.Blockly.Xml.textToDom(currentScript.blocklyXml);
-        window.Blockly.Xml.domToWorkspace(xml, blocklyWorkspace.current);
+        const xml = Blockly.Xml.textToDom(currentScript.blocklyXml);
+        Blockly.Xml.domToWorkspace(xml, blocklyWorkspace.current);
       } catch (e) {
         console.error('Erreur lors du chargement du XML Blockly:', e);
       }
@@ -109,12 +112,12 @@ export default function BlocklyEditor({ onCodeGenerated }) {
     // Événement de changement
     blocklyWorkspace.current.addChangeListener(() => {
       // Sauvegarde du XML
-      const xml = window.Blockly.Xml.workspaceToDom(blocklyWorkspace.current);
-      const xmlText = window.Blockly.Xml.domToText(xml);
+      const xml = Blockly.Xml.workspaceToDom(blocklyWorkspace.current);
+      const xmlText = Blockly.Xml.domToText(xml);
       updateBlocklyXml(xmlText);
       
       // Génération du code Python
-      const pythonCode = window.Blockly.Python.workspaceToCode(blocklyWorkspace.current);
+      const pythonCode = Blockly.Python.workspaceToCode(blocklyWorkspace.current);
       updatePythonCode(pythonCode);
       
       if (onCodeGenerated) {

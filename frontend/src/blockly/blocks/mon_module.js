@@ -2,6 +2,7 @@
  * Définition des blocs Blockly pour chaque fonction
  * Python du fichier robomaster_server.py
  ****************************************************/
+import * as Blockly from 'blockly';
 
 Blockly.Blocks["robomaster_start"] = {
   init: function () {
