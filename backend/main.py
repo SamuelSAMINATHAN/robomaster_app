@@ -242,6 +242,8 @@ async def shutdown_event():
         await robot_client.disconnect()
         await video_stream.stop()
 
+# Point d'entrée si exécuté directement
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    print("Démarrage du serveur backend sur http://localhost:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)

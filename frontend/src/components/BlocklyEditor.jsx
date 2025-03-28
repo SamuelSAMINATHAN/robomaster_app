@@ -4,6 +4,10 @@ import * as Blockly from 'blockly';
 import 'blockly/python';
 import 'blockly/blocks';
 
+// Importer les blocs personnalisés
+import '../blockly/blocks/index.js';
+import '../blockly/generators/index.js';
+
 export default function BlocklyEditor({ onCodeGenerated }) {
   const blocklyDiv = useRef(null);
   const blocklyWorkspace = useRef(null);
@@ -75,6 +79,10 @@ export default function BlocklyEditor({ onCodeGenerated }) {
       ],
     };
 
+    // S'assurer que le div est correctement dimensionné avant d'injecter Blockly
+    blocklyDiv.current.style.width = '100%';
+    blocklyDiv.current.style.height = '500px';
+
     // Création de l'espace de travail Blockly
     blocklyWorkspace.current = Blockly.inject(blocklyDiv.current, {
       toolbox,
@@ -82,7 +90,8 @@ export default function BlocklyEditor({ onCodeGenerated }) {
       horizontalLayout: false,
       trashcan: true,
       sounds: false,
-      media: 'node_modules/blockly/media/',
+      // Utiliser des chemins relatifs pour les médias
+      media: './media/',
       grid: {
         spacing: 20,
         length: 3,

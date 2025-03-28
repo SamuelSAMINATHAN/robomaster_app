@@ -1,58 +1,77 @@
 #!/bin/bash
 
-# Script de démarrage pour l'application RoboMaster
-# Ce script lance le backend et le frontend en parallèle
+# Arrêter le script en cas d'erreur
+set -e
 
-# Vérifier si Python est installé
-if ! command -v python3 &> /dev/null; then
-    echo "Python 3 n'est pas installé. Veuillez l'installer pour continuer."
-    exit 1
+# Afficher ce qui est exécuté
+set -x
+
+# Configuration
+BACKEND_PORT=8000
+FRONTEND_PORT=3000
+
+# Chemins des répertoires
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+BACKEND_DIR="$SCRIPT_DIR/backend"
+FRONTEND_DIR="$SCRIPT_DIR/frontend"
+
+# Activer l'environnement virtuel Python
+if [ -d "$BACKEND_DIR/venv" ]; then
+    echo "Activation de l'environnement virtuel Python..."
+    source "$BACKEND_DIR/venv/bin/activate"
+else
+    echo "Création d'un nouvel environnement virtuel Python..."
+    cd "$BACKEND_DIR"
+    python3 -m venv venv
+    source "$BACKEND_DIR/venv/bin/activate"
+    pip install --upgrade pip
+    pip install -r requirements.txt
 fi
 
-# Vérifier si Node.js est installé
-if ! command -v node &> /dev/null; then
-    echo "Node.js n'est pas installé. Veuillez l'installer pour continuer."
-    exit 1
+# Installer les dépendances frontend si nécessaire
+cd "$FRONTEND_DIR"
+if [ ! -d "node_modules" ]; then
+    echo "Installation des dépendances frontend..."
+    npm install
 fi
 
-# Fonction pour arrêter tous les processus à la sortie
-cleanup() {
-    echo "Arrêt des processus..."
-    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
-    exit 0
-}
+# Copier les fichiers média de Blockly
+echo "Copie des fichiers média de Blockly..."
+npm run copy-blockly-media
 
-# Intercepter les signaux d'arrêt
-trap cleanup SIGINT SIGTERM
-
-echo "Démarrage de l'application RoboMaster en mode hors ligne..."
-
-# Démarrer le backend
-echo "Démarrage du backend..."
-cd "$(dirname "$0")/backend"
-
-# Activer l'environnement virtuel si présent
-if [ -d "venv" ]; then
-    source venv/bin/activate || source venv/Scripts/activate
-fi
-
-# Démarrer le serveur backend
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+# Démarrer le serveur backend en arrière-plan
+echo "Démarrage du serveur backend sur le port $BACKEND_PORT..."
+cd "$BACKEND_DIR"
+python main.py &
 BACKEND_PID=$!
 
-# Attendre que le backend démarre
+# Attendre que le backend soit prêt
+echo "Attente du démarrage du backend..."
 sleep 2
 
-# Démarrer le frontend
-echo "Démarrage du frontend..."
-cd "$(dirname "$0")/frontend"
+# Démarrer le serveur frontend
+echo "Démarrage du serveur frontend sur le port $FRONTEND_PORT..."
+cd "$FRONTEND_DIR"
 npm run dev &
 FRONTEND_PID=$!
 
-echo "Application démarrée !"
-echo "Backend: http://localhost:8000"
-echo "Frontend: http://localhost:5173"
-echo "Appuyez sur Ctrl+C pour arrêter l'application"
+# Fonction pour nettoyer à la sortie
+cleanup() {
+    echo "Arrêt des serveurs..."
+    kill $BACKEND_PID 2>/dev/null || true
+    kill $FRONTEND_PID 2>/dev/null || true
+    exit 0
+}
 
-# Attendre que les processus se terminent
-wait $BACKEND_PID $FRONTEND_PID
+# Attraper les signaux pour nettoyer proprement
+trap cleanup SIGINT SIGTERM
+
+# Attendre que l'utilisateur appuie sur Ctrl+C
+echo "=========================================================="
+echo "Application lancée!"
+echo "Backend: http://localhost:$BACKEND_PORT"
+echo "Frontend: http://localhost:$FRONTEND_PORT"
+echo "Appuyez sur Ctrl+C pour arrêter les serveurs."
+echo "=========================================================="
+
+wait
