@@ -366,39 +366,39 @@ Blockly.Blocks["robomaster_arm_move_to"] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Move the robotic arm to absolute position x,y.");
+    this.setTooltip("Move the arm to a specific position (x,y).");
     this.setHelpUrl("");
   },
 };
 
 Blockly.Blocks["robomaster_set_hit_sensitivity"] = {
   init: function () {
-    this.appendDummyInput().appendField("Régler la sensibilité des impacts");
+    this.appendDummyInput().appendField("Configurer sensibilité d'impact");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Set armor hit sensitivity (not implemented).");
+    this.setTooltip("Set hit sensitivity (not implemented).");
     this.setHelpUrl("");
   },
 };
 
 Blockly.Blocks["robomaster_armor_hit_detection_all"] = {
   init: function () {
-    this.appendDummyInput().appendField("Activer détection d'impacts (tous)");
+    this.appendDummyInput().appendField("Activer détection d'impact sur toutes les armures");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Enable armor hit detection on all panels (not implemented).");
+    this.setTooltip("Enable hit detection on all armor plates (not implemented).");
     this.setHelpUrl("");
   },
 };
 
 Blockly.Blocks["robomaster_get_last_hit_index"] = {
   init: function () {
-    this.appendDummyInput().appendField("Obtenir la dernière zone impactée");
+    this.appendDummyInput().appendField("Obtenir l'index du dernier impact");
     this.setOutput(true, "Number");
     this.setColour(230);
-    this.setTooltip("Get the last armor hit index (not implemented).");
+    this.setTooltip("Get the index of the last hit (not implemented).");
     this.setHelpUrl("");
   },
 };
@@ -415,7 +415,7 @@ Blockly.Blocks["robomaster_check_condition"] = {
 
 Blockly.Blocks["robomaster_cond_wait"] = {
   init: function () {
-    this.appendDummyInput().appendField("Attendre la condition");
+    this.appendDummyInput().appendField("Attendre condition");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
@@ -424,32 +424,31 @@ Blockly.Blocks["robomaster_cond_wait"] = {
   },
 };
 
-// La fonction play_sound apparaît deux fois dans le code. On crée deux blocs distincts:
 Blockly.Blocks["robomaster_play_sound"] = {
   init: function () {
-    this.appendDummyInput().appendField("Jouer un son (1ère version)");
+    this.appendDummyInput().appendField("Jouer un son");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Play a sound (function #1).");
+    this.setTooltip("Play a sound (not implemented).");
     this.setHelpUrl("");
   },
 };
 
 Blockly.Blocks["robomaster_play_sound_2"] = {
   init: function () {
-    this.appendDummyInput().appendField("Jouer un son (2ème version)");
+    this.appendDummyInput().appendField("Jouer un son (variante 2)");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Play a sound (function #2).");
+    this.setTooltip("Play a sound (variant 2) (not implemented).");
     this.setHelpUrl("");
   },
 };
 
 Blockly.Blocks["robomaster_capture"] = {
   init: function () {
-    this.appendDummyInput().appendField("Capturer une photo");
+    this.appendDummyInput().appendField("Capturer une image");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
@@ -464,14 +463,14 @@ Blockly.Blocks["robomaster_record"] = {
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);
-    this.setTooltip("Start recording (not implemented).");
+    this.setTooltip("Record a video (not implemented).");
     this.setHelpUrl("");
   },
 };
 
 Blockly.Blocks["robomaster_say"] = {
   init: function () {
-    this.appendDummyInput().appendField("Dire un texte");
+    this.appendDummyInput().appendField("Dire quelque chose");
     this.setPreviousStatement(true, null);
     this.setNextStatement(true, null);
     this.setColour(230);

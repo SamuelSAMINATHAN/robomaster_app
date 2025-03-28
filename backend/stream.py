@@ -20,48 +20,60 @@ class VideoStream:
         self.current_frame = None
         self.logger = logging.getLogger("video_stream")
         self.custom_processor = None
+
+
+class WebcamStream:
+    """Gère le flux vidéo de la webcam locale"""
     
-    def start_stream(self) -> bool:
-        """Démarre le flux vidéo
+    def __init__(self):
+        self.camera = None
+        self.camera_index = 0  # Webcam par défaut (0 pour la webcam intégrée du MacBook)
+        self.running = False
+        self.frame_callback = None
+        self.current_frame = None
+        self.logger = logging.getLogger("webcam_stream")
+        self.custom_processor = None
+        self.active_connections: List[WebSocket] = []
+    
+    async def start(self) -> bool:
+        """Démarre le flux vidéo de la webcam locale
         
         Returns:
             True si le flux a démarré avec succès, False sinon
         """
-        if not self.robot_client.is_connected():
-            self.logger.error("Impossible de démarrer le flux vidéo: robot non connecté")
-            return False
-        
         try:
-            # Récupérer la caméra du robot
-            self.camera = self.robot_client.get_camera_stream()
-            if not self.camera:
-                self.logger.error("Impossible d'accéder à la caméra du robot")
+            # Ouvrir la webcam locale
+            self.camera = cv2.VideoCapture(self.camera_index)
+            if not self.camera.isOpened():
+                self.logger.error("Impossible d'accéder à la webcam locale")
                 return False
             
-            # Démarrer le flux vidéo
-            self.camera.start_video_stream(display=False)
+            # Configurer la résolution si nécessaire
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, settings.VIDEO_WIDTH)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, int(settings.VIDEO_WIDTH * 9/16))  # Format 16:9
+            
             self.running = True
             
             # Démarrer la boucle de capture dans un thread séparé
             asyncio.create_task(self._capture_loop())
             
-            self.logger.info("Flux vidéo démarré avec succès")
+            self.logger.info("Flux webcam démarré avec succès")
             return True
             
         except Exception as e:
-            self.logger.error(f"Erreur lors du démarrage du flux vidéo: {str(e)}")
+            self.logger.error(f"Erreur lors du démarrage du flux webcam: {str(e)}")
             return False
     
-    def stop_stream(self) -> None:
-        """Arrête le flux vidéo"""
+    async def stop(self) -> None:
+        """Arrête le flux vidéo de la webcam"""
         self.running = False
         
         if self.camera:
             try:
-                self.camera.stop_video_stream()
-                self.logger.info("Flux vidéo arrêté")
+                self.camera.release()
+                self.logger.info("Flux webcam arrêté")
             except Exception as e:
-                self.logger.error(f"Erreur lors de l'arrêt du flux vidéo: {str(e)}")
+                self.logger.error(f"Erreur lors de l'arrêt du flux webcam: {str(e)}")
     
     def set_frame_callback(self, callback: Callable[[np.ndarray], None]) -> None:
         """Définit un callback pour les nouvelles images
@@ -84,13 +96,13 @@ class VideoStream:
         self.custom_processor = None
     
     async def _capture_loop(self) -> None:
-        """Boucle de capture d'images"""
-        while self.running and self.camera:
+        """Boucle de capture d'images de la webcam"""
+        while self.running and self.camera and self.camera.isOpened():
             try:
-                # Récupérer une image
-                frame = self.camera.read_cv2_image(strategy="newest")
+                # Récupérer une image de la webcam
+                ret, frame = self.camera.read()
                 
-                if frame is not None:
+                if ret and frame is not None:
                     # Appliquer le processeur personnalisé si défini
                     if self.custom_processor:
                         try:
@@ -104,9 +116,13 @@ class VideoStream:
                     # Appeler le callback si défini
                     if self.frame_callback:
                         self.frame_callback(frame)
+                    
+                    # Envoyer l'image à tous les clients WebSocket connectés
+                    if self.active_connections:
+                        await self._broadcast_frame(frame)
             
             except Exception as e:
-                self.logger.error(f"Erreur lors de la capture d'image: {str(e)}")
+                self.logger.error(f"Erreur lors de la capture d'image webcam: {str(e)}")
                 # Petite pause en cas d'erreur pour éviter de saturer le CPU
                 await asyncio.sleep(0.5)
                 continue
@@ -151,13 +167,66 @@ class VideoStream:
             # Attendre avant la prochaine frame
             await asyncio.sleep(1.0 / settings.VIDEO_FPS)
     
-    def get_stream_response(self) -> StreamingResponse:
-        """Crée une réponse de streaming pour FastAPI
+    def get_stream(self):
+        """Crée un générateur de frames pour le streaming HTTP
         
         Returns:
-            Réponse de streaming HTTP
+            Générateur de frames pour StreamingResponse
         """
-        return StreamingResponse(
-            self.generate_frames(),
-            media_type="multipart/x-mixed-replace; boundary=frame"
-        )
+        return self.generate_frames()
+    
+    async def connect(self, websocket: WebSocket) -> None:
+        """Accepte une connexion WebSocket et l'ajoute à la liste des connexions actives
+        
+        Args:
+            websocket: Connexion WebSocket à accepter
+        """
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        self.logger.info(f"Nouvelle connexion WebSocket pour le flux vidéo (total: {len(self.active_connections)})")
+    
+    async def disconnect(self, websocket: WebSocket) -> None:
+        """Supprime une connexion WebSocket de la liste des connexions actives
+        
+        Args:
+            websocket: Connexion WebSocket à supprimer
+        """
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            self.logger.info(f"Connexion WebSocket fermée (total: {len(self.active_connections)})")
+    
+    async def _broadcast_frame(self, frame: np.ndarray) -> None:
+        """Diffuse une image à tous les clients WebSocket connectés
+        
+        Args:
+            frame: Image à diffuser
+        """
+        if not self.active_connections:
+            return
+        
+        try:
+            # Convertir l'image en JPEG puis en base64
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            jpg_as_text = base64.b64encode(buffer).decode('utf-8')
+            
+            # Préparer le message
+            message = {
+                "type": "video_frame",
+                "data": jpg_as_text
+            }
+            
+            # Diffuser à tous les clients
+            disconnected_websockets = []
+            for websocket in self.active_connections:
+                try:
+                    await websocket.send_json(message)
+                except Exception as e:
+                    self.logger.error(f"Erreur lors de l'envoi d'une image: {str(e)}")
+                    disconnected_websockets.append(websocket)
+            
+            # Supprimer les connexions fermées
+            for websocket in disconnected_websockets:
+                await self.disconnect(websocket)
+                
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la diffusion d'une image: {str(e)}")

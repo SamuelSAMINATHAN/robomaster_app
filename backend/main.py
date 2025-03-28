@@ -4,12 +4,14 @@ from fastapi.responses import StreamingResponse
 import uvicorn
 import asyncio
 import json
+import cv2
+import base64
 from typing import List, Dict, Any
 
 # Import des modules locaux
 from robot_client import RobotClient
 from executor import PythonExecutor
-from stream import VideoStream
+from stream import VideoStream, WebcamStream
 from logs import LogCapture
 from schemas import ExecutionRequest, RobotStatus
 from translator import translate_blockly_code
@@ -31,6 +33,7 @@ app.add_middleware(
 robot_client = RobotClient()
 executor = PythonExecutor(robot_client)
 video_stream = VideoStream(robot_client)
+webcam_stream = WebcamStream()  # Nouvelle instance pour la webcam
 log_capture = LogCapture()
 
 # Liste des connexions WebSocket actives
@@ -65,6 +68,33 @@ async def video_feed():
         video_stream.get_stream(),
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
+
+@app.get("/webcam_feed")
+async def webcam_feed():
+    # Pour la webcam, pas besoin que le robot soit connecté
+    return StreamingResponse(
+        webcam_stream.get_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
+@app.get("/start_webcam")
+async def start_webcam():
+    try:
+        success = await webcam_stream.start()
+        if success:
+            return {"status": "success", "message": "Webcam démarrée avec succès"}
+        else:
+            raise HTTPException(status_code=500, detail="Impossible de démarrer la webcam")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors du démarrage de la webcam: {str(e)}")
+
+@app.get("/stop_webcam")
+async def stop_webcam():
+    try:
+        await webcam_stream.stop()
+        return {"status": "success", "message": "Webcam arrêtée avec succès"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'arrêt de la webcam: {str(e)}")
 
 @app.post("/connect")
 async def connect_robot():
@@ -154,6 +184,28 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket in active_connections:
             active_connections.remove(websocket)
 
+@app.websocket("/ws/webcam")
+async def webcam_websocket(websocket: WebSocket):
+    try:
+        # Ajouter la connexion à la liste des connexions actives de la webcam
+        await webcam_stream.connect(websocket)
+        
+        # Si la webcam n'est pas déjà en cours d'exécution, la démarrer
+        if not webcam_stream.running:
+            await webcam_stream.start()
+        
+        # Attendre que la connexion soit fermée
+        while True:
+            # Attendre les messages du client (pour garder la connexion active)
+            await websocket.receive_text()
+            
+    except WebSocketDisconnect:
+        # Supprimer la connexion de la liste des connexions actives
+        await webcam_stream.disconnect(websocket)
+    except Exception as e:
+        # En cas d'erreur, s'assurer que la connexion est supprimée
+        await webcam_stream.disconnect(websocket)
+
 # Fonction pour diffuser les mises à jour d'état à tous les clients connectés
 async def broadcast_state():
     while True:
@@ -181,6 +233,11 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    # Arrêter la webcam si elle est en cours d'exécution
+    if webcam_stream.running:
+        await webcam_stream.stop()
+    
+    # Arrêter le robot s'il est connecté
     if robot_state["connected"]:
         await robot_client.disconnect()
         await video_stream.stop()

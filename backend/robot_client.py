@@ -74,20 +74,40 @@ class RobotClient:
         if self.status_thread:
             self.status_thread.join(timeout=1.0)
     
+    def _battery_info_handler(self, battery_info):
+        """Gestionnaire pour les informations de batterie"""
+        self.battery_level = battery_info
+        self.logger.info(f"Batterie: {self.battery_level}%")
+        
+        # Appeler le callback si défini
+        if self.status_callback:
+            self.status_callback({
+                "connected": self.connected,
+                "battery_level": self.battery_level
+            })
+            
+        # Optionnel: Ajuster les LEDs en fonction du niveau de batterie comme dans l'exemple
+        try:
+            if self.connected and self.robot:
+                led = self.robot.led
+                brightness = int(self.battery_level * 255 / 100)
+                led.set_led(comp="all", r=brightness, g=brightness, b=brightness)
+        except Exception as e:
+            self.logger.error(f"Erreur lors de l'ajustement des LEDs: {str(e)}")
+    
     def _status_monitor_task(self) -> None:
         """Tâche de surveillance de l'état du robot"""
         while self.running and self.connected and self.robot:
             try:
-                # Récupérer le niveau de batterie
+                # Utiliser la méthode de souscription pour les informations de batterie
                 battery = self.robot.battery
-                self.battery_level = battery.get_battery_info()["battery_info"]["battery_percentage"]
+                battery.sub_battery_info(5, self._battery_info_handler)
                 
-                # Appeler le callback si défini
-                if self.status_callback:
-                    self.status_callback({
-                        "connected": self.connected,
-                        "battery_level": self.battery_level
-                    })
+                # Attendre que la souscription soit active
+                time.sleep(10)
+                
+                # Désinscrire pour éviter les doublons
+                battery.unsub_battery_info()
             except Exception as e:
                 self.logger.error(f"Erreur lors de la récupération du statut: {str(e)}")
                 # Si erreur de connexion, marquer comme déconnecté
