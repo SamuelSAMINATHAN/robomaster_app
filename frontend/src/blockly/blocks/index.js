@@ -1,3 +1,10 @@
+import * as Blockly from 'blockly/core';
+
+// Rendre Blockly disponible globalement pour les modules qui en ont besoin
+if (typeof window !== 'undefined') {
+  window.Blockly = Blockly;
+}
+
 // Import all block definitions
 import './chassis.js';
 import './gimbal.js';
@@ -12,8 +19,8 @@ import './events.js';
 import './mon_module.js';
 import './robot_init.js';
 
-// Export all blocks
-export {
+// Liste de tous les types de blocs disponibles
+const blockTypes = [
   // Chassis blocks
   'chassis_move',
   'chassis_stop',
@@ -111,4 +118,8 @@ export {
   'robomaster_capture',
   'robomaster_record',
   'robomaster_say'
-};
+];
+
+// Ne pas exporter les noms des blocs directement car cela cause 
+// des problèmes dans les modules ES
+export default blockTypes;

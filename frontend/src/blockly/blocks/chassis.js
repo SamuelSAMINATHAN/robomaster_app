@@ -1,3 +1,9 @@
+/**
+ * Blocs pour le contrôle du châssis du robot
+ */
+
+import * as Blockly from 'blockly/core';
+
 Blockly.Blocks['chassis_move'] = {
   init: function() {
     this.appendValueInput('X_SPEED')

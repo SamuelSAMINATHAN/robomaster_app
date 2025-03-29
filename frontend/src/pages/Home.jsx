@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getAllProjects, deleteProject, renameProject, saveProject } from '../utils/projectStorage'; // Importer la fonction pour sauvegarder un projet
+import { getAllProjects, deleteProject, renameProject, createNewProject, deleteAllProjects, importProjectFromFile } from '../utils/projectStorage';
 import { useRobotStore } from '../store/RobotStore';
-import { FaPencilAlt, FaTimes } from 'react-icons/fa';
+import { FaPencilAlt, FaTimes, FaRobot, FaPlus, FaBook, FaTrash, FaFileImport } from 'react-icons/fa';
 
 export default function Home() {
   const [projects, setProjects] = useState([]);
@@ -11,13 +11,19 @@ export default function Home() {
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [projectToRename, setProjectToRename] = useState(null);
   const [newProjectName, setNewProjectName] = useState('');
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
   const navigate = useNavigate();
   const { setCurrentScript } = useRobotStore();
 
-  useEffect(() => {
-    // Charger les projets depuis le stockage local
+  // Fonction pour charger les projets
+  const loadProjects = () => {
     const loadedProjects = getAllProjects();
     setProjects(loadedProjects);
+  };
+
+  useEffect(() => {
+    // Charger les projets depuis le stockage local
+    loadProjects();
   }, []);
 
   const handleProjectClick = (project) => {
@@ -68,79 +74,151 @@ export default function Home() {
     }
   };
 
-  const handleNewScript = () => {
-    const newProject = {
-      id: Date.now().toString(),
-      name: 'Nouveau Script',
-      blocklyXml: '',
-      pythonCode: '',
-      updatedAt: new Date().toISOString(),
-    };
+  const handleNewScript = async () => {
+    // Demander un nom pour le nouveau script avant de le créer
+    const newProject = await createNewProject();
+    
+    // Si l'utilisateur a annulé, on ne fait rien
+    if (!newProject) return;
+    
+    // Mettre à jour la liste des projets
+    loadProjects();
+    
+    // Définir le nouveau projet comme script actuel
+    setCurrentScript({
+      id: newProject.id,
+      name: newProject.name,
+      blocklyXml: newProject.blocklyXml,
+      pythonCode: newProject.pythonCode,
+      modified: false
+    });
+    
+    // Naviguer vers l'éditeur Blockly
+    navigate('/blockly');
+  };
 
-    saveProject(newProject); // Sauvegarder le nouveau projet
-    setProjects([...projects, newProject]); // Mettre à jour la liste des projets
-    setCurrentScript(newProject); // Définir le nouveau projet comme script actuel
-    navigate('/blockly'); // Naviguer vers l'éditeur Blockly
+  const handleImport = async () => {
+    // Importer un script depuis un fichier
+    const importedProject = await importProjectFromFile();
+    if (importedProject) {
+      // Recharger la liste des projets
+      loadProjects();
+      
+      // Afficher un message de succès
+      alert(`Le script "${importedProject.name}" a été importé avec succès.`);
+    }
+  };
+
+  const handleDeleteAllClick = () => {
+    setShowDeleteAllModal(true);
+  };
+
+  const confirmDeleteAll = () => {
+    deleteAllProjects();
+    setProjects([]);
+    setShowDeleteAllModal(false);
   };
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
-      <header className="p-4 border-b border-gray-700">
-        <h1 className="text-2xl font-bold">Bienvenue dans l'application RoboMaster</h1>
+      <header className="p-6 border-b border-gray-700 bg-gray-800 shadow-lg">
+        <div className="container mx-auto flex items-center">
+          <FaRobot className="text-blue-400 mr-4" size={32} />
+          <h1 className="text-3xl font-bold">Application RoboMaster</h1>
+        </div>
       </header>
 
-      <main className="flex-1 p-6">
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
-          <Link
-            to="#"
-            onClick={handleNewScript}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded mb-2 sm:mb-0"
-          >
-            Nouveau script Blockly
-          </Link>
-          <Link
-            to="/guide"
-            className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded"
-          >
-            Guide d'utilisation
-          </Link>
-        </div>
-
-        <h2 className="text-xl font-semibold mb-4">Mes scripts</h2>
-        
-        {projects.length === 0 ? (
-          <div className="bg-gray-800 p-6 rounded text-center">
-            <p className="text-gray-400 mb-4">Vous n'avez pas encore de scripts</p>
-            <Link
-              to="/blockly"
-              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded inline-block"
+      <main className="flex-1 p-6 container mx-auto">
+        <div className="bg-gradient-to-r from-blue-900 to-purple-900 p-6 rounded-lg shadow-lg mb-8">
+          <h2 className="text-2xl font-bold mb-4">Bienvenue dans l'application de programmation RoboMaster</h2>
+          <p className="mb-6 text-gray-300">
+            Créez et exécutez facilement des programmes pour contrôler votre robot avec des blocs de programmation.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-4">
+            <button
+              onClick={handleNewScript}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg shadow font-medium transition-colors flex items-center"
             >
-              Créer mon premier script
+              <FaPlus className="mr-2" />
+              Nouveau script Blockly
+            </button>
+            
+            <button
+              onClick={handleImport}
+              className="bg-teal-600 hover:bg-teal-500 text-white px-6 py-3 rounded-lg shadow font-medium transition-colors flex items-center"
+            >
+              <FaFileImport className="mr-2" />
+              Importer un script
+            </button>
+            
+            <Link
+              to="/guide"
+              className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg shadow font-medium transition-colors flex items-center"
+            >
+              <FaBook className="mr-2" />
+              Guide d'utilisation
             </Link>
           </div>
+        </div>
+
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold border-b border-gray-700 pb-2">Mes scripts</h2>
+          {projects.length > 0 && (
+            <button
+              onClick={handleDeleteAllClick}
+              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded shadow flex items-center transition-colors"
+              title="Supprimer tous les scripts"
+            >
+              <FaTrash className="mr-2" size={14} />
+              Tout supprimer
+            </button>
+          )}
+        </div>
+        
+        {projects.length === 0 ? (
+          <div className="bg-gray-800 p-8 rounded-lg text-center shadow-lg">
+            <p className="text-gray-400 mb-6 text-lg">Vous n'avez pas encore de scripts</p>
+            <div className="flex flex-col sm:flex-row justify-center gap-4">
+              <button
+                onClick={handleNewScript}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center justify-center"
+              >
+                <FaPlus className="mr-2" />
+                Créer mon premier script
+              </button>
+              
+              <button
+                onClick={handleImport}
+                className="bg-teal-600 hover:bg-teal-500 text-white px-6 py-3 rounded-lg font-medium transition-colors inline-flex items-center justify-center"
+              >
+                <FaFileImport className="mr-2" />
+                Importer un script
+              </button>
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="bg-gray-800 p-4 rounded hover:bg-gray-700 transition cursor-pointer relative"
+                className="bg-gray-800 p-6 rounded-lg hover:bg-gray-750 transition cursor-pointer relative shadow-lg border border-gray-700 hover:border-blue-500"
                 onClick={() => handleProjectClick(project)}
               >
-                <div className="font-semibold text-lg">{project.name}</div>
-                <div className="text-sm text-gray-400">
-                  Modifié le: {new Date(project.updatedAt).toLocaleDateString()}
+                <div className="font-semibold text-xl mb-2">{project.name}</div>
+                <div className="text-sm text-gray-400 mb-4">
+                  Dernière modification: {new Date(project.updatedAt || project.createdAt).toLocaleString()}
                 </div>
-                <div className="absolute top-3 right-3 flex space-x-2">
+                <div className="absolute top-4 right-4 flex space-x-2">
                   <button
                     onClick={(e) => handleRenameClick(e, project)}
-                    className="bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-full"
+                    className="bg-blue-600 hover:bg-blue-500 text-white p-1.5 rounded-full shadow transition-colors"
                     title="Renommer"
                   >
                     <FaPencilAlt size={14} />
                   </button>
                   <button
                     onClick={(e) => handleDeleteClick(e, project)}
-                    className="bg-red-600 hover:bg-red-500 text-white p-1.5 rounded-full"
+                    className="bg-red-600 hover:bg-red-500 text-white p-1.5 rounded-full shadow transition-colors"
                     title="Supprimer"
                   >
                     <FaTimes size={14} />
@@ -154,20 +232,20 @@ export default function Home() {
 
       {/* Modal de confirmation de suppression */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full shadow-xl border border-gray-700">
             <h3 className="text-xl font-semibold mb-4">Confirmer la suppression</h3>
             <p className="mb-6">Êtes-vous sûr de vouloir supprimer le script "{projectToDelete?.name}" ? Cette action est irréversible.</p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded"
+                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded transition-colors"
               >
                 Annuler
               </button>
               <button
                 onClick={confirmDelete}
-                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded"
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded transition-colors"
               >
                 Supprimer
               </button>
@@ -176,28 +254,52 @@ export default function Home() {
         </div>
       )}
 
+      {/* Modal de suppression de tous les scripts */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full shadow-xl border border-gray-700">
+            <h3 className="text-xl font-semibold mb-4">Supprimer tous les scripts</h3>
+            <p className="mb-6">Êtes-vous sûr de vouloir supprimer <span className="font-bold text-red-500">tous les scripts</span> ? Cette action est irréversible.</p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setShowDeleteAllModal(false)}
+                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={confirmDeleteAll}
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded transition-colors"
+              >
+                Tout supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de renommage */}
       {showRenameModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full">
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md w-full shadow-xl border border-gray-700">
             <h3 className="text-xl font-semibold mb-4">Renommer le script</h3>
             <input
               type="text"
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              className="w-full p-2 mb-6 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
+              className="w-full p-3 mb-6 bg-gray-700 text-white rounded border border-gray-600 focus:border-blue-500 focus:outline-none"
               placeholder="Nouveau nom du script"
             />
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowRenameModal(false)}
-                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded"
+                className="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded transition-colors"
               >
                 Annuler
               </button>
               <button
                 onClick={confirmRename}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded transition-colors"
                 disabled={!newProjectName.trim()}
               >
                 Renommer

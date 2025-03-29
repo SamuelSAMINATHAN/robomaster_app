@@ -1,13 +1,23 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RoboMaster Blockly</title>
-
-    <!-- Utilisation de la version locale de Blockly installée via npm -->
-    <!-- La bibliothèque sera importée directement dans les composants qui l'utilisent -->
+    <title>RoboMaster App</title>
+    <!-- Polyfills pour Blockly -->
+    <script src="https://unpkg.com/@blockly/dev-tools@6.0.2/dist/index.js"></script>
+    <script>
+      // Polyfill pour ResizeObserver (nécessaire pour Blockly)
+      if (!window.ResizeObserver) {
+        console.log("Ajout du polyfill ResizeObserver");
+        window.ResizeObserver = function(callback) {
+          this.observe = function() {};
+          this.unobserve = function() {};
+          this.disconnect = function() {};
+        };
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

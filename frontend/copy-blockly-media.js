@@ -1,5 +1,10 @@
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+// Get current file directory (equivalent to __dirname in CommonJS)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Chemins source et destination
 const BLOCKLY_MEDIA_PATH = path.join(__dirname, 'node_modules', 'blockly', 'media');

@@ -1,36 +1,38 @@
 import time
 import threading
+import random
 from typing import Optional, Dict, Any, Callable
 import logging
 
-# Import du SDK RoboMaster
-try:
-    import robomaster
-    from robomaster import robot
-except ImportError:
-    logging.error("Le SDK RoboMaster n'est pas installé. Veuillez l'installer avec 'pip install robomaster'")
+# Configurer le logger
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class RobotClient:
+    """Version de simulation du client RoboMaster"""
+    
     def __init__(self):
         self.robot = None
         self.connected = False
-        self.battery_level = 0
+        self.battery_level = 100
         self.status_thread = None
         self.running = False
         self.status_callback = None
         self.logger = logging.getLogger("robot_client")
+        self.logger.info("Mode simulation activé - Pas besoin du SDK RoboMaster")
     
-    def connect(self, ip: str = "192.168.42.2") -> bool:
-        """Connecte au robot RoboMaster EP"""
+    async def connect(self, ip: str = "192.168.42.2") -> bool:
+        """Connecte au robot RoboMaster EP (simulation)"""
         if self.connected:
             return True
             
         try:
-            self.logger.info(f"Tentative de connexion au robot à l'adresse {ip}...")
-            self.robot = robot.Robot()
-            self.robot.initialize(conn_type="ap", proto_type="udp", sn=None, ip=ip)
+            self.logger.info(f"Tentative de connexion au robot simulé à l'adresse {ip}...")
+            # Simule un délai de connexion
+            await self._async_sleep(1.5)
             self.connected = True
-            self.logger.info("Connexion au robot réussie")
+            self.battery_level = 85
+            self.logger.info("Connexion au robot simulé réussie")
             
             # Démarrer le thread de surveillance du statut
             self.start_status_monitoring()
@@ -41,25 +43,27 @@ class RobotClient:
             self.connected = False
             return False
     
-    def disconnect(self) -> None:
-        """Déconnecte du robot"""
-        if not self.connected or not self.robot:
+    async def disconnect(self) -> None:
+        """Déconnecte du robot (simulation)"""
+        if not self.connected:
             return
             
         try:
             # Arrêter le thread de surveillance
             self.stop_status_monitoring()
             
+            # Simule un délai de déconnexion
+            await self._async_sleep(0.5)
+            
             # Déconnexion du robot
-            self.robot.close()
             self.connected = False
             self.battery_level = 0
-            self.logger.info("Déconnexion du robot réussie")
+            self.logger.info("Déconnexion du robot simulé réussie")
         except Exception as e:
             self.logger.error(f"Erreur lors de la déconnexion du robot: {str(e)}")
     
     def start_status_monitoring(self) -> None:
-        """Démarre un thread pour surveiller l'état du robot"""
+        """Démarre un thread pour surveiller l'état du robot (simulation)"""
         if self.status_thread and self.status_thread.is_alive():
             return
             
@@ -72,50 +76,35 @@ class RobotClient:
         """Arrête le thread de surveillance"""
         self.running = False
         if self.status_thread:
-            self.status_thread.join(timeout=1.0)
+            try:
+                self.status_thread.join(timeout=1.0)
+            except Exception:
+                pass
     
-    def _battery_info_handler(self, battery_info):
-        """Gestionnaire pour les informations de batterie"""
-        self.battery_level = battery_info
-        self.logger.info(f"Batterie: {self.battery_level}%")
-        
-        # Appeler le callback si défini
-        if self.status_callback:
-            self.status_callback({
-                "connected": self.connected,
-                "battery_level": self.battery_level
-            })
-            
-        # Optionnel: Ajuster les LEDs en fonction du niveau de batterie comme dans l'exemple
-        try:
-            if self.connected and self.robot:
-                led = self.robot.led
-                brightness = int(self.battery_level * 255 / 100)
-                led.set_led(comp="all", r=brightness, g=brightness, b=brightness)
-        except Exception as e:
-            self.logger.error(f"Erreur lors de l'ajustement des LEDs: {str(e)}")
+    async def _async_sleep(self, seconds):
+        """Fonction d'attente asynchrone"""
+        import asyncio
+        await asyncio.sleep(seconds)
     
     def _status_monitor_task(self) -> None:
-        """Tâche de surveillance de l'état du robot"""
-        while self.running and self.connected and self.robot:
+        """Tâche de surveillance de l'état du robot (simulation)"""
+        while self.running and self.connected:
             try:
-                # Utiliser la méthode de souscription pour les informations de batterie
-                battery = self.robot.battery
-                battery.sub_battery_info(5, self._battery_info_handler)
+                # Simulation de la batterie qui descend lentement
+                if self.battery_level > 0:
+                    self.battery_level -= random.uniform(0, 0.2)
+                    self.battery_level = max(0, self.battery_level)
+                    self.logger.info(f"Batterie simulée: {self.battery_level:.1f}%")
                 
-                # Attendre que la souscription soit active
-                time.sleep(10)
+                # Appeler le callback si défini
+                if self.status_callback:
+                    self.status_callback({
+                        "connected": self.connected,
+                        "battery_level": round(self.battery_level)
+                    })
                 
-                # Désinscrire pour éviter les doublons
-                battery.unsub_battery_info()
             except Exception as e:
-                self.logger.error(f"Erreur lors de la récupération du statut: {str(e)}")
-                # Si erreur de connexion, marquer comme déconnecté
-                if "connection" in str(e).lower():
-                    self.connected = False
-                    if self.status_callback:
-                        self.status_callback({"connected": False})
-                    break
+                self.logger.error(f"Erreur lors de la simulation du statut: {str(e)}")
             
             # Attendre avant la prochaine vérification
             time.sleep(5)
@@ -124,63 +113,70 @@ class RobotClient:
         """Définit un callback pour les mises à jour de statut"""
         self.status_callback = callback
     
-    def move(self, x: float = 0, y: float = 0, z: float = 0, speed: float = 0.5) -> bool:
-        """Déplace le robot (en mètres)"""
-        if not self.connected or not self.robot:
+    async def move(self, x: float = 0, y: float = 0, z: float = 0, speed: float = 0.5) -> bool:
+        """Déplace le robot - simulation"""
+        if not self.connected:
             return False
             
         try:
-            self.robot.chassis.move(x=x, y=y, z=z, xy_speed=speed)
+            self.logger.info(f"Simulation: Déplacement du robot - x:{x}, y:{y}, z:{z}, vitesse:{speed}")
+            await self._async_sleep(abs(max(x, y, z)) * 2)  # Simule un temps de déplacement
             return True
         except Exception as e:
             self.logger.error(f"Erreur lors du déplacement: {str(e)}")
             return False
     
-    def rotate(self, angle: float, speed: float = 30) -> bool:
-        """Fait tourner le robot (en degrés)"""
-        if not self.connected or not self.robot:
+    async def rotate(self, angle: float, speed: float = 30) -> bool:
+        """Fait tourner le robot - simulation"""
+        if not self.connected:
             return False
             
         try:
-            self.robot.chassis.drive_speed(x=0, y=0, z=angle, timeout=None)
+            self.logger.info(f"Simulation: Rotation du robot - angle:{angle}, vitesse:{speed}")
+            await self._async_sleep(abs(angle/90))  # Simule un temps de rotation
             return True
         except Exception as e:
             self.logger.error(f"Erreur lors de la rotation: {str(e)}")
             return False
     
-    def set_led(self, r: int, g: int, b: int, effect: str = "solid") -> bool:
-        """Change la couleur des LEDs"""
-        if not self.connected or not self.robot:
+    async def set_led(self, r: int, g: int, b: int, effect: str = "solid") -> bool:
+        """Change la couleur des LEDs - simulation"""
+        if not self.connected:
             return False
             
         try:
-            led_effect = robomaster.led.LED_EFFECT_SOLID
-            if effect == "blink":
-                led_effect = robomaster.led.LED_EFFECT_BLINK
-            elif effect == "breath":
-                led_effect = robomaster.led.LED_EFFECT_BREATH
-                
-            self.robot.led.set_led(comp=robomaster.led.LED_ALL, r=r, g=g, b=b, effect=led_effect)
+            self.logger.info(f"Simulation: Changement des LEDs - R:{r}, G:{g}, B:{b}, effet:{effect}")
             return True
         except Exception as e:
             self.logger.error(f"Erreur lors du changement de LED: {str(e)}")
             return False
     
     def get_camera_stream(self):
-        """Récupère le flux vidéo de la caméra"""
-        if not self.connected or not self.robot:
+        """Récupère le flux vidéo de la caméra - simulation"""
+        if not self.connected:
             return None
             
-        try:
-            return self.robot.camera
-        except Exception as e:
-            self.logger.error(f"Erreur lors de l'accès à la caméra: {str(e)}")
-            return None
+        self.logger.info("Simulation: Accès au flux caméra du robot")
+        return None  # En simulation, on utilisera la webcam locale à la place
     
     def is_connected(self) -> bool:
         """Vérifie si le robot est connecté"""
         return self.connected
     
-    def get_battery_level(self) -> int:
+    async def get_battery_level(self) -> int:
         """Récupère le niveau de batterie"""
-        return self.battery_level
+        return round(self.battery_level)
+        
+    async def send_command(self, command: str) -> Dict[str, Any]:
+        """Envoie une commande directe au robot - simulation"""
+        if not self.connected:
+            return {"status": "error", "message": "Robot non connecté"}
+            
+        self.logger.info(f"Simulation: Envoi de commande: {command}")
+        await self._async_sleep(0.5)  # Simule un délai de traitement
+        
+        return {
+            "status": "success",
+            "command": command,
+            "result": "Commande exécutée en simulation"
+        }

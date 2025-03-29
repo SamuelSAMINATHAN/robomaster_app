@@ -245,5 +245,5 @@ async def shutdown_event():
 # Point d'entrée si exécuté directement
 if __name__ == "__main__":
     import uvicorn
-    print("Démarrage du serveur backend sur http://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    print(f"Démarrage du serveur backend sur http://localhost:{settings.PORT}")
+    uvicorn.run(app, host=settings.HOST, port=settings.PORT)

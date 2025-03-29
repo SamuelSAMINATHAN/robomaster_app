@@ -4,6 +4,7 @@ import Home from "./pages/Home.jsx";
 import BlocklyPage from "./pages/BlocklyPage.jsx";
 import GlobalTopbar from "./components/GlobalTopbar.jsx";
 import { useRobotStore } from "./store/RobotStore";
+import { initStorage } from './utils/projectStorage';
 
 // Fonction pour récupérer l'état du robot depuis le backend (fallback si WebSocket n'est pas disponible)
 const fetchRobotStatus = async (setConnected, setBatteryLevel, setExecuting) => {
@@ -112,6 +113,11 @@ export default function App() {
       }
     };
   }, [setConnected, setBatteryLevel, setExecuting]);
+
+  // Initialiser le stockage au démarrage de l'application
+  useEffect(() => {
+    initStorage();
+  }, []);
 
   return (
     <Router>

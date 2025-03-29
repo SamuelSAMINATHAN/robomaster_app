@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Test Blockly</title>
+  <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+    #blocklyDiv {
+      height: 100%;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="blocklyDiv"></div>
+
+  <script>
+    // Définition de la toolbox
+    const toolbox = {
+      kind: 'categoryToolbox',
+      contents: [
+        {
+          kind: 'category',
+          name: 'Logique',
+          colour: '#5C81A6',
+          contents: [
+            { kind: 'block', type: 'controls_if' },
+            { kind: 'block', type: 'logic_compare' },
+            { kind: 'block', type: 'logic_boolean' },
+          ],
+        },
+        {
+          kind: 'category',
+          name: 'Boucles',
+          colour: '#5CA65C',
+          contents: [
+            { kind: 'block', type: 'controls_repeat_ext' },
+            { kind: 'block', type: 'controls_whileUntil' },
+          ],
+        },
+        {
+          kind: 'category',
+          name: 'Math',
+          colour: '#5C68A6',
+          contents: [
+            { kind: 'block', type: 'math_number' },
+            { kind: 'block', type: 'math_arithmetic' },
+          ],
+        },
+        {
+          kind: 'category',
+          name: 'Variables',
+          colour: '#A65C81',
+          custom: 'VARIABLE',
+        },
+      ],
+    };
+
+    // Injection de Blockly
+    const workspace = Blockly.inject('blocklyDiv', {
+      toolbox: toolbox,
+      media: './media/',
+      scrollbars: true,
+      trashcan: true,
+    });
+
+    // Ajouter un listener pour les changements
+    workspace.addChangeListener(function() {
+      const code = Blockly.JavaScript.workspaceToCode(workspace);
+      console.log(code);
+    });
+
+    // Vérification pour le débogage
+    console.log('Blockly Version:', Blockly.VERSION);
+    console.log('Workspace créé:', workspace);
+  </script>
+</body>
+</html> 
