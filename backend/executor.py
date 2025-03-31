@@ -5,6 +5,8 @@ import logging
 import asyncio
 from typing import Dict, Any, List, Callable, Optional
 from contextlib import redirect_stdout, redirect_stderr
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 from robot_client import RobotClient
 from translator import translate_blockly_code
@@ -17,10 +19,31 @@ class PythonExecutor:
         self.current_execution = None
         self.logger = logging.getLogger("python_executor")
         self.log_callback = None
+        self.thread_pool = ThreadPoolExecutor(max_workers=1)
+        self.timeout = 30  # Timeout en secondes pour l'exécution du code
+        self._forbidden_imports = {
+            'os', 'sys', 'subprocess', 'socket', 'threading', 'multiprocessing',
+            'ctypes', 'cffi', 'cryptography', 'hashlib', 'random', 'secrets'
+        }
     
     def set_log_callback(self, callback: Callable[[str], None]) -> None:
         """Définit un callback pour les logs d'exécution"""
         self.log_callback = callback
+    
+    def _check_forbidden_imports(self, code: str) -> List[str]:
+        """Vérifie si le code contient des imports interdits"""
+        forbidden_found = []
+        for line in code.split('\n'):
+            line = line.strip()
+            if line.startswith('import '):
+                module = line.split()[1].split('.')[0]
+                if module in self._forbidden_imports:
+                    forbidden_found.append(module)
+            elif line.startswith('from '):
+                module = line.split()[1].split('.')[0]
+                if module in self._forbidden_imports:
+                    forbidden_found.append(module)
+        return forbidden_found
     
     async def execute_code(self, code: str) -> Dict[str, Any]:
         """Exécute du code Python généré par Blockly
@@ -38,6 +61,15 @@ class PythonExecutor:
                 "logs": ["Erreur: Le robot n'est pas connecté. Veuillez vous connecter avant d'exécuter un script."]
             }
         
+        # Vérifier les imports interdits
+        forbidden_imports = self._check_forbidden_imports(code)
+        if forbidden_imports:
+            return {
+                "success": False,
+                "message": "Imports interdits détectés",
+                "logs": [f"Erreur: Les imports suivants sont interdits pour des raisons de sécurité: {', '.join(forbidden_imports)}"]
+            }
+        
         # Préparer la capture des sorties
         stdout_capture = io.StringIO()
         stderr_capture = io.StringIO()
@@ -47,17 +79,35 @@ class PythonExecutor:
         prepared_code = translate_blockly_code(code)
         
         try:
-            # Capturer stdout et stderr
-            with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-                # Créer un environnement d'exécution avec accès au robot
-                exec_globals = {
-                    "robot": self.robot_client,
-                    "print": self._create_print_function(logs),
-                    "__name__": "__main__"
+            # Créer une tâche asynchrone pour l'exécution avec timeout
+            async def execute_with_timeout():
+                # Capturer stdout et stderr
+                with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+                    # Créer un environnement d'exécution avec accès au robot
+                    exec_globals = {
+                        "robot": self.robot_client,
+                        "print": self._create_print_function(logs),
+                        "__name__": "__main__",
+                        "time": time,
+                        "asyncio": asyncio
+                    }
+                    
+                    # Exécuter le code dans un thread séparé
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(
+                        self.thread_pool,
+                        lambda: exec(prepared_code, exec_globals)
+                    )
+            
+            # Exécuter avec timeout
+            try:
+                await asyncio.wait_for(execute_with_timeout(), timeout=self.timeout)
+            except asyncio.TimeoutError:
+                return {
+                    "success": False,
+                    "message": f"Timeout après {self.timeout} secondes",
+                    "logs": logs + [f"Erreur: Le script a dépassé la limite de temps de {self.timeout} secondes"]
                 }
-                
-                # Exécuter le code
-                exec(prepared_code, exec_globals)
             
             # Récupérer les sorties
             stdout_output = stdout_capture.getvalue()
@@ -118,3 +168,13 @@ class PythonExecutor:
     def is_executing(self) -> bool:
         """Vérifie si un script est en cours d'exécution"""
         return self.current_execution is not None and not self.current_execution.done()
+    
+    async def stop_execution(self) -> None:
+        """Arrête l'exécution en cours du script"""
+        if self.current_execution and not self.current_execution.done():
+            self.current_execution.cancel()
+            try:
+                await self.current_execution
+            except asyncio.CancelledError:
+                pass
+            self.current_execution = None

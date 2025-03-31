@@ -14,12 +14,12 @@ class VideoStream:
     
     def __init__(self, robot_client: RobotClient):
         self.robot_client = robot_client
-        self.camera = None
         self.running = False
         self.frame_callback = None
         self.current_frame = None
         self.logger = logging.getLogger("video_stream")
         self.custom_processor = None
+        self.active_connections: List[WebSocket] = []
         
     async def start(self) -> bool:
         """Démarre le flux vidéo du robot
@@ -28,8 +28,10 @@ class VideoStream:
             True si le flux a démarré avec succès, False sinon
         """
         try:
-            # L'initialisation dépend de l'API du robot
-            # Code fictif ici, à adapter selon l'API réelle du robot
+            if not self.robot_client.is_connected():
+                self.logger.error("Le robot n'est pas connecté")
+                return False
+                
             self.running = True
             
             # Démarrer la boucle de capture dans un thread séparé
@@ -48,15 +50,45 @@ class VideoStream:
         
     async def _capture_loop(self) -> None:
         """Boucle de capture d'images du robot"""
-        while self.running:
+        frames_without_success = 0
+        max_frames_without_success = 10
+        
+        while self.running and self.robot_client.is_connected():
             try:
-                # Code fictif, à remplacer par le vrai code du robot
-                # Créer une image noire avec un texte par défaut
-                frame = np.zeros((480, 640, 3), dtype=np.uint8)
-                cv2.putText(frame, "Flux Robot", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+                # Récupérer l'image de la caméra du robot
+                frame = self.robot_client.get_camera_stream()
                 
-                self.current_frame = frame
-                
+                if frame is not None:
+                    # Réinitialiser le compteur d'erreurs
+                    frames_without_success = 0
+                    
+                    # Appliquer le processeur personnalisé si défini
+                    if self.custom_processor:
+                        try:
+                            frame = self.custom_processor(frame)
+                        except Exception as e:
+                            self.logger.error(f"Erreur dans le processeur d'image: {str(e)}")
+                    
+                    # Stocker l'image courante
+                    self.current_frame = frame
+                    
+                    # Appeler le callback si défini
+                    if self.frame_callback:
+                        self.frame_callback(frame)
+                    
+                    # Envoyer l'image à tous les clients WebSocket connectés
+                    if self.active_connections:
+                        await self._broadcast_frame(frame)
+                else:
+                    frames_without_success += 1
+                    self.logger.warning(f"Échec de capture d'image du robot ({frames_without_success}/{max_frames_without_success})")
+                    
+                    # Si trop d'échecs consécutifs, arrêter la boucle
+                    if frames_without_success >= max_frames_without_success:
+                        self.logger.error("Impossible de récupérer les images du robot")
+                        self.running = False
+                        break
+            
             except Exception as e:
                 self.logger.error(f"Erreur lors de la capture d'image du robot: {str(e)}")
                 await asyncio.sleep(0.5)
@@ -73,7 +105,7 @@ class VideoStream:
         if self.current_frame is None:
             # Créer une image par défaut
             frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            cv2.putText(frame, "Pas d'image", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            cv2.putText(frame, "Pas d'image du robot", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         else:
             frame = self.current_frame
             
@@ -104,6 +136,34 @@ class VideoStream:
             Générateur de frames pour StreamingResponse
         """
         return self.generate_frames()
+    
+    async def connect(self, websocket: WebSocket) -> None:
+        """Ajoute une connexion WebSocket active"""
+        self.active_connections.append(websocket)
+        self.logger.info(f"Nouvelle connexion WebSocket (total: {len(self.active_connections)})")
+    
+    async def disconnect(self, websocket: WebSocket) -> None:
+        """Supprime une connexion WebSocket active"""
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            self.logger.info(f"Connexion WebSocket fermée (total: {len(self.active_connections)})")
+    
+    async def _broadcast_frame(self, frame: np.ndarray) -> None:
+        """Envoie une frame à tous les clients WebSocket connectés"""
+        try:
+            # Convertir l'image en JPEG
+            _, jpeg_frame = cv2.imencode('.jpg', frame)
+            frame_bytes = jpeg_frame.tobytes()
+            
+            # Envoyer à tous les clients connectés
+            for websocket in self.active_connections:
+                try:
+                    await websocket.send_bytes(frame_bytes)
+                except Exception as e:
+                    self.logger.error(f"Erreur lors de l'envoi de la frame à un client: {str(e)}")
+                    await self.disconnect(websocket)
+        except Exception as e:
+            self.logger.error(f"Erreur lors de la diffusion de la frame: {str(e)}")
 
 
 class WebcamStream:
